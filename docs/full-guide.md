@@ -293,6 +293,8 @@ daily_stock_analysis/
 | `ANTHROPIC_MODEL` | Claude 模型名称 | `claude-sonnet-4-6` | 可选 |
 | `ANTHROPIC_TEMPERATURE` | Claude 温度参数（0.0-1.0） | `0.7` | 可选 |
 | `ANTHROPIC_MAX_TOKENS` | Claude 响应最大 token 数 | `8192` | 可选 |
+| `NACE_API_KEY` | [Drex](https://console.nace.ai/docs/drex) 决策模型 API Key；设置后普通分析（非 Agent 模式）的 `sentiment_score` / `operation_advice` / `decision_type` 由 Drex 给出，LLM 照常撰写报告并与之一致，报告模型字段同时显示两者，`dashboard.drex_rating` 记录各档概率；请求失败或超时（20 秒）时由 LLM 评级 | - | 可选 |
+| `NACE_DEFAULT_DECISION_MODEL` | Drex 模型名 | `drex-max-finance` | 否 |
 
 > GitHub Actions 说明：仓库自带 `00-daily-analysis.yml` 在 `GENERATION_FALLBACK_BACKEND` 未配置时显式使用 `litellm`，避免未设置的 Secret/Variable 被导出为空值并意外禁用 backend fallback。若要在 Actions 中禁用 backend fallback，请将 fallback 设为 primary backend，让 resolver 走 self no-op。
 

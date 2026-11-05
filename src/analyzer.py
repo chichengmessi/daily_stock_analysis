@@ -102,6 +102,7 @@ from src.schemas.decision_scale import (
     score_band_metadata,
 )
 from src.schemas.report_schema import AnalysisReportSchema
+from src.drex_rating import rate_with_drex
 from src.market_context import detect_market, get_market_role, get_market_guidelines
 from src.services.daily_market_context import format_daily_market_context_prompt_section
 from src.market_phase_prompt import format_market_phase_prompt_section
@@ -4132,6 +4133,10 @@ Output strictly in the following JSON format. This is a complete Decision Dashbo
                 report_language=report_language,
                 analysis_context_pack_summary=analysis_context_pack_summary,
             )
+            # Optional: Drex rates from the same messages; the LLM writes the report to match.
+            drex_rating = rate_with_drex(f"{system_prompt}\n\n{prompt}")
+            if drex_rating:
+                prompt += drex_rating.prompt_note(report_language)
             legacy_audit_context = {
                 "language": report_language,
                 "market_group": _legacy_market_group(code),
@@ -4274,6 +4279,20 @@ Output strictly in the following JSON format. This is a complete Decision Dashbo
                         missing_fields,
                     )
                     break
+
+            if drex_rating and result.success:
+                result.sentiment_score = drex_rating.score
+                result.operation_advice = drex_rating.advice(report_language)
+                result.decision_type = drex_rating.band.decision_type
+                populate_decision_action_fields(result, use_existing_action=False)
+                result.model_used = f"{model_used}, {drex_rating.model}"
+                dashboard = result.dashboard if isinstance(result.dashboard, dict) else {}
+                result.dashboard = dashboard
+                dashboard["drex_rating"] = drex_rating.record()
+                logger.info(
+                    "[Drex] %s(%s) 评级由 %s 给出: %s, 评分 %d",
+                    name, code, drex_rating.model, result.operation_advice, drex_rating.score,
+                )
 
             if should_persist_usage_telemetry(llm_usage):
                 persist_llm_usage(llm_usage, model_used, call_type="analysis", stock_code=code)

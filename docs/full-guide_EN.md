@@ -258,6 +258,8 @@ Default schedule: Every weekday at **18:00 (Beijing Time)** automatic execution.
 | `OPENAI_BASE_URL` | OpenAI-compatible API endpoint | - | Optional |
 | `OLLAMA_API_BASE` | Ollama local service address (e.g. `http://localhost:11434`), see [LLM Config Guide](LLM_CONFIG_GUIDE_EN.md) | - | Optional |
 | `OPENAI_MODEL` | OpenAI model name (legacy) | `gpt-5.5` | Optional |
+| `NACE_API_KEY` | [Drex](https://console.nace.ai/docs/drex) decision model API key; when set, Drex picks `sentiment_score` / `operation_advice` / `decision_type` in the standard (non-Agent) analysis, the LLM writes the report to match, the report's model field names both, and `dashboard.drex_rating` keeps the probability of each level; if the request fails or times out (20 s), the LLM rates the stock | - | Optional |
+| `NACE_DEFAULT_DECISION_MODEL` | Drex model name | `drex-max-finance` | No |
 
 > GitHub Actions note: the bundled `00-daily-analysis.yml` explicitly uses `litellm` when `GENERATION_FALLBACK_BACKEND` is not configured, so an unset Secret/Variable is not exported as an empty value that disables backend fallback. To disable backend fallback in Actions, set the fallback to the primary backend and let the resolver treat it as self no-op.
 
