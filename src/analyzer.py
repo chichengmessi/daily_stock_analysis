@@ -102,6 +102,7 @@ from src.schemas.decision_scale import (
     score_band_metadata,
 )
 from src.schemas.report_schema import AnalysisReportSchema
+from src.drex_news_check import DrexNewsCheck, check_news_with_drex
 from src.market_context import detect_market, get_market_role, get_market_guidelines
 from src.services.daily_market_context import format_daily_market_context_prompt_section
 from src.market_phase_prompt import format_market_phase_prompt_section
@@ -1533,6 +1534,54 @@ def _downgrade_buy_without_capital_flow(
     )
     _sync_stability_dashboard_fields(result)
     logger.info("[decision_stability] Downgraded buy because capital flow is unavailable: %s", flow_status)
+
+
+def _apply_drex_news_check(result: "AnalysisResult", check: DrexNewsCheck) -> None:
+    """Record Drex's news check; a buy call becomes watch only when Drex is confident the news is bad."""
+    dashboard = result.dashboard if isinstance(result.dashboard, dict) else {}
+    result.dashboard = dashboard
+    dashboard["drex_news_check"] = check.record()
+    result.model_used = f"{result.model_used}, {check.model}" if result.model_used else check.model
+    logger.info(
+        "[Drex] %s(%s) 新闻核查由 %s 给出: tone=%s, P(bearish)=%.2f, P(adverse)=%.2f",
+        result.name, result.code, check.model, check.tone,
+        check.tone_probabilities["bearish"], check.adverse_probability,
+    )
+    if result.decision_type != "buy" or not check.blocks_buy:
+        return
+
+    language = normalize_report_language(getattr(result, "report_language", "zh"))
+    reason = check.reason(language)
+    if language == "zh":
+        advice, confidence = "观望", "低"
+        no_position = "空仓先不买入，等负面消息消化或得到澄清后再评估。"
+        has_position = "持仓关注负面消息进展，以关键支撑为风控线。"
+    else:
+        advice, confidence = "Watch", "Low"
+        no_position = "Do not buy yet; wait until the negative news is digested or clarified."
+        has_position = "Follow how the news develops and use key support as the risk line."
+    perspective = _as_dict_for_decision_guard(dashboard.get("data_perspective"))
+    price_position = _as_dict_for_decision_guard(perspective.get("price_position"))
+
+    result.decision_type = "hold"
+    result.confidence_level = confidence
+    _bound_hold_watch_sentiment_score(result, reason=reason, final_action="watch")
+    _apply_hold_watch_dashboard(
+        result,
+        language,
+        advice=advice,
+        reason=reason,
+        current_price=_first_numeric_value(price_position.get("current_price")),
+        support=_first_numeric_value(price_position.get("support_level")),
+        resistance=_first_numeric_value(price_position.get("resistance_level")),
+        flow_bias="not_checked",
+        no_position=no_position,
+        has_position=has_position,
+    )
+    _sync_stability_dashboard_fields(result)
+    # The pipeline keeps a parsed action when the advice is unchanged after analyze(); rebuild it here.
+    populate_decision_action_fields(result, use_existing_action=False)
+    logger.info("[Drex] %s(%s) 新闻核查将买入结论降为%s", result.name, result.code, advice)
 
 
 def _downgrade_to_structural_hold(
@@ -4274,6 +4323,11 @@ Output strictly in the following JSON format. This is a complete Decision Dashbo
                         missing_fields,
                     )
                     break
+
+            # Optional: Drex checks the news; a confident bad-news answer vetoes a buy call.
+            news_check = check_news_with_drex(name, code, news_context) if result.success else None
+            if news_check:
+                _apply_drex_news_check(result, news_check)
 
             if should_persist_usage_telemetry(llm_usage):
                 persist_llm_usage(llm_usage, model_used, call_type="analysis", stock_code=code)

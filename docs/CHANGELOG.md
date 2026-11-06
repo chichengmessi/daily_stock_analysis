@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [文档] 文档中心补充 `market-support.md` 入口，与 README / 完整指南的市场支持链接保持一致。
 - [修复] 美股社交舆情 Reddit 个股端点切换至现行 Adanos 契约 `/reddit/stocks/v1/stock/{ticker}`（旧 `/reddit/stocks/v1/report/{ticker}` 已下线、固定 404，导致 Reddit 段落始终显示无数据）；适配官方契约 200+`found=false` 无数据语义：`get_social_context` 在证据登记前将空报告归一化为平台无数据，三源全空返回 `None` 且不再误置 `news_evidence_present`（X/Polymarket 有数据时贡献保留）；mention 正文按 `text_snippet`→`text`→`title` 回退，日线情绪 `sentiment_score` 优先且保留真实零值，旧字段 `avg_sentiment` 兼容回退（#2448）。
 - [修复] Futu OpenD 未运行或协议未就绪时，FutuFetcher 改为异步连接并最多等待 5 秒，失败后关闭连接、只记录一条警告并在 5 分钟内跳过 Futu，港股请求回退到其他数据源，不再因 SDK 同步构造无限重连而卡住整轮分析（#2447）。
+- [新功能] 新增可选的 Drex 新闻核查（`NACE_API_KEY`，默认关闭）：普通分析由 Nace 的 Drex 决策模型阅读本次搜索到的新闻，判断新闻倾向与是否有重大负面事件，结果记录在 `dashboard.drex_news_check`；仅当 Drex 有把握（概率 ≥ 0.7）新闻利空时买入结论降为观望，否则保持 LLM 结论；无新闻或请求失败时不影响分析，详见 `docs/full-guide.md`。
 
 ## [3.33.0] - 2026-10-15
 
